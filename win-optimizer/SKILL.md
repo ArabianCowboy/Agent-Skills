@@ -9,9 +9,10 @@ This skill provides a structured workflow for Windows maintenance and startup op
 
 ## Workflow
 
-1.  Scan for Bloat: Execute scripts/analyze_system.ps1 to collect data on startup items, active services (specifically PC Manager), and temp file sizes.
+1.  Scan for Bloat: Execute scripts/analyze_system.ps1 and scripts/analyze_privacy.ps1 to collect data on startup items, active services, privacy settings, and temp file sizes.
 2.  Analyze and Categorize: Process the script output and categorize items:
-    *   Known Offenders: Docker, LGHUB, PC Manager, Edge AutoLaunch, OneDrive.
+    *   Known Offenders: Docker, LGHUB, PC Manager, Edge AutoLaunch, OneDrive, Widgets.
+    *   Privacy/Telemetry: DiagTrack (Telemetry), Advertising ID, Background Apps.
     *   High Impact: Any item consuming significant CPU/Memory or slowing down boot.
     *   System Critical: Windows Security, Audio Drivers (usually safe to keep).
 3.  Present Findings: Show the user a structured report of what was found.

@@ -4,11 +4,37 @@ Get-CimInstance Win32_StartupCommand | Select-Object Name, Command, Location | C
 Write-Host "Checking PC Manager Status..."
 Get-Service | Where-Object { $_.Name -match 'PCManager' } | Select-Object Name, Status, StartType | ConvertTo-Json
 
-Write-Host "Calculating Temp Files..."
-$tempFolders = @($env:TEMP, "C:\Windows\Temp")
-foreach ($folder in $tempFolders) {
-    if (Test-Path $folder) {
-        $size = (Get-ChildItem $folder -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
-        Write-Host "$folder : $( [Math]::Round($size / 1MB, 2) ) MB"
+Write-Host "Checking Logitech Services..."
+Get-Service | Where-Object { $_.Name -match 'LGHUB' -or $_.Name -match 'logi_' } | Select-Object Name, Status, StartType | ConvertTo-Json
+
+Write-Host "Checking Widgets Status..."
+$widgetsKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+if (Test-Path $widgetsKey) {
+    $val = Get-ItemProperty -Path $widgetsKey -Name "TaskbarDa" -ErrorAction SilentlyContinue
+    @{ "Name" = "Widgets (TaskbarDa)"; "Value" = if ($val -and $null -ne $val.TaskbarDa) { $val.TaskbarDa } else { 1 } } | ConvertTo-Json
+}
+
+Write-Host "Checking Edge Background Settings..."
+$edgeStartup = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Edge\Main" -Name "StartupBoostEnabled" -ErrorAction SilentlyContinue
+$edgeBgUser = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Edge" -Name "BackgroundModeEnabled" -ErrorAction SilentlyContinue
+$edgeBgPolicy = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Policies\Microsoft\Edge" -Name "BackgroundModeEnabled" -ErrorAction SilentlyContinue
+
+$bgStatus = 1
+if (($null -ne $edgeBgUser -and $edgeBgUser.BackgroundModeEnabled -eq 0) -or ($null -ne $edgeBgPolicy -and $edgeBgPolicy.BackgroundModeEnabled -eq 0)) {
+    $bgStatus = 0
+}
+
+@{ "StartupBoost" = if ($edgeStartup) { $edgeStartup.StartupBoostEnabled } else { 1 }; "BackgroundMode" = $bgStatus } | ConvertTo-Json
+
+Write-Host "Calculating Temp and Cache Files..."
+$tempFolders = @(
+    @{ Name = "User Temp"; Path = $env:TEMP },
+    @{ Name = "Windows Temp"; Path = "C:\Windows\Temp" },
+    @{ Name = "Update Download Cache"; Path = "C:\Windows\SoftwareDistribution\Download" }
+)
+foreach ($f in $tempFolders) {
+    if (Test-Path $f.Path) {
+        $size = (Get-ChildItem $f.Path -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        Write-Host "$($f.Name) : $( [Math]::Round($size / 1MB, 2) ) MB"
     }
 }
