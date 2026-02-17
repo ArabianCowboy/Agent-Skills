@@ -11,14 +11,22 @@ param (
     [switch]$CleanUpdateCache
 )
 
+# Import PathManager for unified paths
+. "$PSScriptRoot\PathManager.ps1"
+
 $ErrorActionPreference = "Continue"
+
+# Initialize directories at start
+Initialize-WinOptimizerDirs
+$paths = Get-WinOptimizerPaths
 
 function Write-OptimizationLog {
     param([string]$Message, [string]$Type = "Info")
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $logEntry = "[$timestamp] [$Type] $Message"
-    $logPath = "$env:USERPROFILE\WinOptimizer_Log.txt"
-    Add-Content -Path $logPath -Value $logEntry
+    
+    # Use unified path from PathManager
+    Add-Content -Path $paths.OptimizationLog -Value $logEntry
     
     $color = switch ($Type) {
         "Success" { "Green" }
@@ -270,7 +278,27 @@ if ($CleanUpdateCache) { Clear-UpdateCache }
 Write-Host "`n========================================" -ForegroundColor Magenta
 Write-Host "   Optimization Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Magenta
-Write-Host "Log file: $env:USERPROFILE\WinOptimizer_Log.txt" -ForegroundColor White
+
+# Update latest folder with log
+Update-Latest -SourcePath $paths.OptimizationLog -DestName "optimization.log"
+
+# Add to history
+Add-ToHistory -Entry @{
+    Type = "Optimization"
+    Actions = @{
+        Telemetry = $Telemetry.IsPresent
+        Privacy = $Privacy.IsPresent
+        Bloatware = $Bloatware.IsPresent
+        Performance = $Performance.IsPresent
+        CleanTemp = $CleanTemp.IsPresent
+        CleanUpdateCache = $CleanUpdateCache.IsPresent
+    }
+    File = "optimization.log"
+}
+
+Write-Host "   Session: $($paths.SessionID)" -ForegroundColor White
+Write-Host "   Log file: $($paths.OptimizationLog)" -ForegroundColor White
+Write-Host "   History: $($paths.HistoryFile)" -ForegroundColor White
 
 if ($CleanTemp -or $CleanUpdateCache) {
     Write-Host "`n NOTE: Restart your PC to complete cleanup." -ForegroundColor Yellow

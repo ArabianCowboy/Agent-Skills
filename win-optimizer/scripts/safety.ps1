@@ -6,14 +6,22 @@ param (
     [switch]$Restore
 )
 
+# Import PathManager for unified paths
+. "$PSScriptRoot\PathManager.ps1"
+
 $ErrorActionPreference = "Stop"
-$timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$backupDir = "$env:USERPROFILE\WinOptimizer_Backup_$timestamp"
+
+# Initialize directories
+Initialize-WinOptimizerDirs
+$paths = Get-WinOptimizerPaths
 
 function New-SafetyBackup {
     Write-Host "=== Creating Safety Backup ===" -ForegroundColor Yellow
     
-    # Create backup directory
+    # Use unified backup directory from PathManager
+    $backupDir = $paths.BackupDir
+    
+    # Create backup directory (should already exist from Initialize, but ensure it)
     if (!(Test-Path $backupDir)) {
         New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
     }
@@ -21,11 +29,13 @@ function New-SafetyBackup {
     
     # 1. Create System Restore Point
     Write-Host "`n[1/2] Creating System Restore Point..." -ForegroundColor Cyan
+    $restorePointCreated = $false
     try {
         # Check if system protection is enabled
         $systemProperties = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SystemRestore" -ErrorAction SilentlyContinue
         if ($null -ne $systemProperties -and $systemProperties.RPSessionInterval -ne 0) {
             Checkpoint-Computer -Description "WinOptimizer_PreOptimization" -RestorePointType "MODIFY_SETTINGS" -ErrorAction Stop
+            $restorePointCreated = $true
             Write-Host "OK: Restore point created successfully" -ForegroundColor Green
         } else {
             Write-Host "WARN: System Protection is disabled. Enable it in System Properties to use restore points." -ForegroundColor Yellow
@@ -75,8 +85,8 @@ function New-SafetyBackup {
     
     # Create backup manifest
     $manifest = @{
-        Timestamp = $timestamp
-        RestorePointCreated = ($null -ne $systemProperties -and $systemProperties.RPSessionInterval -ne 0)
+        Timestamp = $paths.SessionID
+        RestorePointCreated = $restorePointCreated
         KeysBackedUp = $backedUpCount
         TotalKeys = $registryKeys.Count
         BackupPath = $backupDir
@@ -84,9 +94,26 @@ function New-SafetyBackup {
     
     $manifest | Out-File -FilePath "$backupDir\backup_manifest.json" -Encoding UTF8
     
+    # Add to history
+    Add-ToHistory -Entry @{
+        Type = "SafetyBackup"
+        RestorePointCreated = $restorePointCreated
+        KeysBackedUp = $backedUpCount
+        File = "backups\backup_manifest.json"
+    }
+
+    # Update latest backups
+    $latestBackupDir = "$($paths.LatestDir)\backups"
+    if (!(Test-Path $latestBackupDir)) {
+        New-Item -ItemType Directory -Path $latestBackupDir -Force | Out-Null
+    }
+    Copy-Item -Path "$backupDir\*" -Destination $latestBackupDir -Force -Recurse
+    
     Write-Host "`n=== Backup Complete ===" -ForegroundColor Yellow
-    Write-Host "Location: $backupDir" -ForegroundColor White
-    Write-Host "Registry hives backed up: $backedUpCount/$($registryKeys.Count)" -ForegroundColor White
+    Write-Host "   Session: $($paths.SessionID)" -ForegroundColor White
+    Write-Host "   Location: $backupDir" -ForegroundColor White
+    Write-Host "   Registry hives backed up: $backedUpCount/$($registryKeys.Count)" -ForegroundColor White
+    Write-Host "   History: $($paths.HistoryFile)" -ForegroundColor White
     
     return $backupDir
 }

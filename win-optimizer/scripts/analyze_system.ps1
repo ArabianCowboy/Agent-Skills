@@ -2,6 +2,9 @@
 # Scans startup items, bloatware services, performance settings
 # Outputs structured JSON for easy AI parsing
 
+# Import PathManager for unified paths
+. "$PSScriptRoot\PathManager.ps1"
+
 $ErrorActionPreference = "Continue"
 
 $results = @{
@@ -139,6 +142,38 @@ foreach ($f in $tempFolders) {
     }
 }
 
-# Final Output
-$results | ConvertTo-Json -Depth 5 | Out-File -FilePath "$env:USERPROFILE\analyze_system.json" -Encoding UTF8
-Write-Host "`n✅ Analysis complete. Findings saved to: $env:USERPROFILE\analyze_system.json" -ForegroundColor Green
+# Final Output & Save
+Initialize-WinOptimizerDirs
+$paths = Get-WinOptimizerPaths
+
+# Calculate total temp size safely
+$totalTempSize = 0
+foreach ($folder in $results.TempFolders) {
+    if ($folder.SizeMB) {
+        $totalTempSize += $folder.SizeMB
+    }
+}
+
+# Save to session directory
+$jsonOutput = $results | ConvertTo-Json -Depth 5
+$jsonOutput | Out-File -FilePath $paths.AnalysisSystem -Encoding UTF8
+
+# Also save to latest folder
+Update-Latest -SourcePath $paths.AnalysisSystem -DestName "analysis_system.json"
+
+# Add to history
+Add-ToHistory -Entry @{
+    Type = "SystemAnalysis"
+    StartupItemsCount = $results.StartupItems.Count
+    ServicesCount = $results.Services.Count
+    TotalTempSizeMB = $totalTempSize
+    File = "analysis_system.json"
+}
+
+# Output to console
+Write-Host "`n✅ System Analysis complete." -ForegroundColor Green
+Write-Host "   Session: $($paths.SessionID)" -ForegroundColor White
+Write-Host "   Saved to: $($paths.AnalysisSystem)" -ForegroundColor White
+
+# Output JSON to console for piping/AI parsing
+$jsonOutput

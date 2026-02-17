@@ -2,6 +2,9 @@
 # Scans telemetry, privacy settings, and annoyances
 # Outputs structured JSON for easy AI parsing
 
+# Import PathManager for unified paths
+. "$PSScriptRoot\PathManager.ps1"
+
 $ErrorActionPreference = "Continue"
 
 $results = @{
@@ -98,10 +101,33 @@ foreach ($s in $settings) {
 }
 
 # ============================================
-# 3. Summary
+# 3. Summary & Save
 # ============================================
 $issueCount = ($results.PrivacySettings | Where-Object { $_.IsIssue -eq $true }).Count
 $results | Add-Member -NotePropertyName "IssueCount" -NotePropertyValue $issueCount -PassThru
 
-# Output as single JSON object
-$results | ConvertTo-Json -Depth 4
+# Initialize directories
+Initialize-WinOptimizerDirs
+$paths = Get-WinOptimizerPaths
+
+# Save to session directory
+$jsonOutput = $results | ConvertTo-Json -Depth 4
+$jsonOutput | Out-File -FilePath $paths.AnalysisPrivacy -Encoding UTF8
+
+# Also save to latest folder
+Update-Latest -SourcePath $paths.AnalysisPrivacy -DestName "analysis_privacy.json"
+
+# Add to history
+Add-ToHistory -Entry @{
+    Type = "PrivacyAnalysis"
+    IssueCount = $issueCount
+    File = "analysis_privacy.json"
+}
+
+# Output to console
+Write-Host "`n✅ Privacy Analysis complete." -ForegroundColor Green
+Write-Host "   Session: $($paths.SessionID)" -ForegroundColor White
+Write-Host "   Saved to: $($paths.AnalysisPrivacy)" -ForegroundColor White
+
+# Output JSON to console for piping/AI parsing
+$jsonOutput
